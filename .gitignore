@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.code-workspace
+
+# YOLO 모델 파일 (크기가 큼)
+*.pt
+*.onnx
+*.engine
+yolov8n.pt
+yolov8m.pt
+yolov8l.pt
+yolov8x.pt
+
+# 데이터 파일 및 영상
+data/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# 학습 시 생성되는 로그/결과
+runs/
+*.log
+*.cache
+
+# 캐시
+.cache/
+.pytest_cache/
+htmlcov/
+
+# 환경 파일
+.env
+.env.local
+
+# OS
+Thumbs.db
+
+# 임시 파일
+*.tmp
+*.temp
+temp/
+
+# 기타
+.git/
