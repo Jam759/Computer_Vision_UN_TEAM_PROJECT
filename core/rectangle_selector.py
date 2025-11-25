@@ -1,145 +1,114 @@
+"""
+마우스로 ROI(주차칸) 선택 모듈
+"""
+
 import cv2
+from core.utils import GeometryUtils
+
 
 class RectangleSelector:
+    """
+    마우스 클릭으로 직사각형 주차칸을 선택하는 클래스
+    
+    - 클릭 4번으로 사각형 생성
+    - 원본 좌표 저장 + 리사이징된 화면에 표시
+    """
+    
     def __init__(self, frame, mode="add"):
         """
-        frame : OpenCV 이미지 (numpy array)
-        mode  : "add" 또는 "delete" (기본값 "add")
+        Args:
+            frame: 입력 이미지 (numpy array)
+            mode: "add" (주차칸 추가) 또는 "delete" (주차칸 제거)
         """
         self.original_frame = frame.copy()
-        self.frame = self.resize_frame(frame.copy())
+        self.frame, self.scale_x, self.scale_y = GeometryUtils.resize_with_ratio(frame)
         self.temp_frame = self.frame.copy()
-        self.points = []
-        self.rectangles = []      # [[(x1,y1), (x2,y2), (x3,y3), (x4,y4)], ...]
-        self.mode = mode          # 외부 인자로 설정 가능 (기본 "add")
         
-        # 스케일 팩터 (원본과 표시된 이미지의 비율)
-        h_orig, w_orig = self.original_frame.shape[:2]
-        h_resized, w_resized = self.frame.shape[:2]
-        self.scale_x = w_orig / w_resized
-        self.scale_y = h_orig / h_resized
-
+        self.points = []           # 현재 클릭 좌표
+        self.rectangles = []       # 저장된 사각형 목록: [[(x1,y1), (x2,y2), (x3,y3), (x4,y4)], ...]
+        self.mode = mode           # 모드: "add" 또는 "delete"
+        
         cv2.namedWindow("Frame")
         cv2.imshow("Frame", self.temp_frame)
         cv2.setMouseCallback("Frame", self.click_event)
     
-    def resize_frame(self, frame):
-        """
-        프레임을 화면 크기에 맞게 리사이징
-        최대 1200x700 크기로 제한
-        """
-        h, w = frame.shape[:2]
-        max_w, max_h = 1200, 700
-        
-        if w > max_w or h > max_h:
-            ratio = min(max_w / w, max_h / h)
-            new_w = int(w * ratio)
-            new_h = int(h * ratio)
-            return cv2.resize(frame, (new_w, new_h))
-        
-        return frame
-
     def set_mode(self, mode):
-        """
-            외부에서 모드를 바꿀 때 사용: 'add' 또는 'delete'
-        """
+        """모드 변경 ("add" 또는 "delete")"""
         if mode not in ("add", "delete"):
             raise ValueError("mode must be 'add' or 'delete'")
         self.mode = mode
-        print(f"모드 변경 → {self.mode}")
-
+    
     def run(self):
-        
-        """
-            윈도우를 띄우고 ESC를 눌러 종료할 때까지 루프를 돈다.
-            내부적으로는 모드 변경을 하지 않으므로 외부에서 set_mode 호출로 제어할 것.
-        """
-        
+        """윈도우 실행 (ESC로 종료)"""
         while True:
             cv2.imshow("Frame", self.temp_frame)
             key = cv2.waitKey(1) & 0xFF
             if key == 27:  # ESC
                 break
         self.close()
-
+    
     def close(self):
+        """윈도우 종료"""
         cv2.destroyAllWindows()
-
+    
     def click_event(self, event, x, y, flags, param):
+        """마우스 클릭 이벤트 처리"""
         if event != cv2.EVENT_LBUTTONDOWN:
             return
-
-        # 마우스 좌표를 원본 영상 좌표로 변환
+        
+        # 마우스 좌표 -> 원본 영상 좌표 변환
         orig_x = int(x * self.scale_x)
         orig_y = int(y * self.scale_y)
-
+        
         if self.mode == "add":
-            self.handle_add(orig_x, orig_y, x, y)
+            self._handle_add(orig_x, orig_y, x, y)
         elif self.mode == "delete":
-            self.handle_delete(orig_x, orig_y)
-
+            self._handle_delete(x, y)
+        
         cv2.imshow("Frame", self.temp_frame)
-
-    # ADD MODE - 리사이징된 화면에 표시하되, 원본 좌표로 저장
-    def handle_add(self, orig_x, orig_y, disp_x, disp_y):
-        # 원본 영상 좌표로 저장
+    
+    def _handle_add(self, orig_x, orig_y, disp_x, disp_y):
+        """주차칸 추가 처리"""
+        # 원본 좌표로 저장
         self.points.append((orig_x, orig_y))
         
-        # 리사이징된 좌표로 화면에 표시
+        # 리사이징된 좌표로 표시
         cv2.circle(self.temp_frame, (disp_x, disp_y), 5, (0, 255, 0), -1)
-
+        
         if len(self.points) == 4:
-            # 사각형 저장 (원본 좌표)
+            # 사각형 저장 및 그리기
             self.rectangles.append(self.points.copy())
-            # 그림 그리기 (리사이징된 좌표)
             for i in range(4):
-                p1_disp = (int(self.points[i][0] / self.scale_x), int(self.points[i][1] / self.scale_y))
-                p2_disp = (int(self.points[(i+1)%4][0] / self.scale_x), int(self.points[(i+1)%4][1] / self.scale_y))
+                p1_orig = self.points[i]
+                p2_orig = self.points[(i + 1) % 4]
+                p1_disp = (int(p1_orig[0] / self.scale_x), int(p1_orig[1] / self.scale_y))
+                p2_disp = (int(p2_orig[0] / self.scale_x), int(p2_orig[1] / self.scale_y))
                 cv2.line(self.temp_frame, p1_disp, p2_disp, (255, 0, 0), 2)
             self.points = []
-
-    # -----------------------------
-    # DELETE MODE
-    # -----------------------------
-    def handle_delete(self, x, y):
-        delete_index = None
-
-        # 클릭한 점이 어떤 사각형 내부인지 검사
-        for idx, rect in enumerate(self.rectangles):
-            if self.point_in_polygon((x, y), rect):
-                delete_index = idx
-                break
-
-        if delete_index is not None:
-            print("사각형 삭제됨:", delete_index)
-            self.rectangles.pop(delete_index)
-            self.redraw()
-
-    # -----------------------------
-    # Point in polygon (4점 다각형)
-    # -----------------------------
-    def point_in_polygon(self, point, polygon):
-        x, y = point
-        cnt = 0
-
-        for i in range(4):
-            x1, y1 = polygon[i]
-            x2, y2 = polygon[(i+1) % 4]
-            # 수평 교차 검사 (ray casting)
-            if (y1 > y) != (y2 > y):
-                atX = (x2 - x1) * (y - y1) / (y2 - y1 + 1e-9) + x1
-                if x < atX:
-                    cnt += 1
-
-        return (cnt % 2) == 1
-
-    # -----------------------------
-    # 전체 다시 그림
-    # -----------------------------
-    def redraw(self):
+    
+    def _handle_delete(self, disp_x, disp_y):
+        """주차칸 제거 처리 (클릭한 점 근처의 사각형 삭제)"""
+        if not self.rectangles:
+            return
+        
+        # 리사이징된 좌표로 변환 후 근처 사각형 찾기
+        for i, rect in enumerate(self.rectangles):
+            for point in rect:
+                p_disp = (int(point[0] / self.scale_x), int(point[1] / self.scale_y))
+                dist = ((disp_x - p_disp[0]) ** 2 + (disp_y - p_disp[1]) ** 2) ** 0.5
+                if dist < 10:  # 10 픽셀 이내
+                    self.rectangles.pop(i)
+                    self._redraw()
+                    return
+    
+    def _redraw(self):
+        """현재 상태로 화면 다시 그리기"""
         self.temp_frame = self.frame.copy()
+        
         for rect in self.rectangles:
             for i in range(4):
-                p1_disp = (int(rect[i][0] / self.scale_x), int(rect[i][1] / self.scale_y))
-                p2_disp = (int(rect[(i+1)%4][0] / self.scale_x), int(rect[(i+1)%4][1] / self.scale_y))
+                p1_orig = rect[i]
+                p2_orig = rect[(i + 1) % 4]
+                p1_disp = (int(p1_orig[0] / self.scale_x), int(p1_orig[1] / self.scale_y))
+                p2_disp = (int(p2_orig[0] / self.scale_x), int(p2_orig[1] / self.scale_y))
                 cv2.line(self.temp_frame, p1_disp, p2_disp, (255, 0, 0), 2)
