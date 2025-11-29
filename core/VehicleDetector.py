@@ -15,8 +15,20 @@ class VehicleDetector:
     OVERLAP_THRESHOLD = 0.2          # 30% 겹침 판정 기준
     
     def __init__(self):
-        """YOLOv8 nano 모델 로드"""
+        """YOLOv8 Medium 모델 로드 (GPU 우선, CPU 폴백)"""
         self.model = YOLO('yolov8m.pt')
+        
+        # GPU 사용 가능 여부 확인 및 설정
+        try:
+            # GPU 우선 사용
+            self.device = 0  # GPU:0 (첫 번째 GPU)
+            self.model.to('cuda')
+            print("✓ GPU(CUDA) 모드로 실행 중입니다.")
+        except Exception as e:
+            # GPU 없으면 CPU로 폴백
+            self.device = 'cpu'
+            self.model.to('cpu')
+            print(f"⚠ GPU를 사용할 수 없어 CPU 모드로 전환합니다. ({e})")
     
     def detect_vehicles(self, frame):
         """
@@ -29,7 +41,7 @@ class VehicleDetector:
             tuple: (바운딩 박스 리스트, 신뢰도 리스트)
                    [[x1, y1, x2, y2], ...], [conf, ...]
         """
-        results = self.model(frame, verbose=False, classes=self.VEHICLE_CLASSES)
+        results = self.model(frame, verbose=False, classes=self.VEHICLE_CLASSES, device=self.device)
         
         bboxes = []
         confidences = []

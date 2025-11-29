@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageTk
 from core.rectangle_selector import RectangleSelector
 from core.utils import GeometryUtils
+from core.ui_components import UIStyle, UIButton, UILabel, UIFrame
 
 
 class ROIScreen:
@@ -27,49 +28,51 @@ class ROIScreen:
     
     def _build_ui(self):
         """UI 구성"""
-        frame = tk.Frame(self.app.container, bg=self.app.bg_primary)
+        frame = tk.Frame(self.app.container, bg=UIStyle.BG_PRIMARY)
         frame.pack(fill=tk.BOTH, expand=True, pady=20)
         
         # 제목
-        tk.Label(frame, text="주차칸 선택 화면", font=("Arial", 28, "bold"),
-                fg=self.app.accent_cyan, bg=self.app.bg_primary).pack(pady=10)
+        UILabel.create_title(frame, "주차칸 선택 화면", UIStyle.BG_PRIMARY).pack(pady=10)
         
         # ROI 선택 버튼
-        tk.Button(frame, text="주차칸 설정(OpenCV 창)",
-                 bg=self.app.accent_cyan, fg="#000000",
-                 font=("Arial", 11, "bold"), padx=20, pady=10,
-                 activebackground="#00a8cc", relief=tk.FLAT,
-                 cursor="hand2", command=self.start_roi).pack(pady=10)
+        UIButton.create_primary(
+            frame,
+            "주차칸 설정(OpenCV 창)",
+            self.start_roi,
+            padx=20,
+            pady=10
+        ).pack(pady=10)
         
         # ROI 개수 표시
-        self.label = tk.Label(frame, text="ROI: 0개",
-                             fg=self.app.text_secondary, bg=self.app.bg_primary,
-                             font=("Arial", 11))
+        self.label = UILabel.create_secondary(frame, "ROI: 0개", UIStyle.BG_PRIMARY)
         self.label.pack()
         
         # 미리보기 영역
-        preview_frame = tk.Frame(frame, bg=self.app.bg_secondary,
-                                highlightbackground=self.app.accent_cyan, highlightthickness=2)
+        preview_frame = UIFrame.create_video_panel(frame)
         preview_frame.pack(pady=15)
         
-        self.preview_label = tk.Label(preview_frame, bg=self.app.bg_secondary)
+        self.preview_label = tk.Label(preview_frame, bg=UIStyle.BG_SECONDARY)
         self.preview_label.pack()
         
         # 네비게이션 버튼
-        button_frame = tk.Frame(frame, bg=self.app.bg_primary)
+        button_frame = tk.Frame(frame, bg=UIStyle.BG_PRIMARY)
         button_frame.pack(pady=20)
         
-        tk.Button(button_frame, text="영상 재생 화면 →",
-                 bg=self.app.accent_cyan, fg="#000000",
-                 font=("Arial", 11, "bold"), padx=15, pady=8,
-                 activebackground="#00a8cc", relief=tk.FLAT,
-                 cursor="hand2", command=self.app.show_play).pack(side=tk.LEFT, padx=5)
+        UIButton.create_primary(
+            button_frame,
+            "영상 재생 화면 →",
+            self.app.show_play,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT, padx=5)
         
-        tk.Button(button_frame, text="← 메인으로",
-                 bg=self.app.accent_red, fg="#000000",
-                 font=("Arial", 11, "bold"), padx=15, pady=8,
-                 activebackground="#cc0000", relief=tk.FLAT,
-                 cursor="hand2", command=self.app.show_main).pack(side=tk.LEFT, padx=5)
+        UIButton.create_danger(
+            button_frame,
+            "← 메인으로",
+            self.app.show_main,
+            padx=15,
+            pady=8
+        ).pack(side=tk.LEFT, padx=5)
     
     def start_roi(self):
         """ROI 선택 시작"""

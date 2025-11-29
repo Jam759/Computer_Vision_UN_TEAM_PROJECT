@@ -3,6 +3,7 @@
 """
 
 import tkinter as tk
+from core.ui_components import UIStyle
 from ui.main_screen import MainScreen
 from ui.roi_choice_screen import ROIScreen
 from ui.play_screen import PlayScreen
@@ -18,14 +19,6 @@ class ParkingApp:
     3. PlayScreen: 실시간 주차 감지 및 모니터링
     """
     
-    # 라이트 그레이 모던 테마 색상
-    BG_PRIMARY = "#f5f5f5"      # 주 배경색 (밝은 회색)
-    BG_SECONDARY = "#e8e8e8"    # 보조 배경색
-    ACCENT_CYAN = "#0088cc"     # 주 강조색 (파랑)
-    ACCENT_RED = "#cc3333"      # 보조 강조색 (빨강)
-    TEXT_PRIMARY = "#333333"    # 주 텍스트색 (어두운 회색)
-    TEXT_SECONDARY = "#666666"  # 보조 텍스트색 (중간 회색)
-    
     def __init__(self, root):
         """
         Args:
@@ -35,13 +28,13 @@ class ParkingApp:
         root.title("Parking Monitor System")
         root.geometry("900x650")
         
-        # 테마 색상 설정
-        self.bg_primary = self.BG_PRIMARY
-        self.bg_secondary = self.BG_SECONDARY
-        self.accent_cyan = self.ACCENT_CYAN
-        self.accent_red = self.ACCENT_RED
-        self.text_primary = self.TEXT_PRIMARY
-        self.text_secondary = self.TEXT_SECONDARY
+        # 테마 색상 설정 (UIStyle에서 상수 사용)
+        self.bg_primary = UIStyle.BG_PRIMARY
+        self.bg_secondary = UIStyle.BG_SECONDARY
+        self.accent_cyan = UIStyle.ACCENT_CYAN
+        self.accent_red = UIStyle.ACCENT_RED
+        self.text_primary = UIStyle.TEXT_PRIMARY
+        self.text_secondary = UIStyle.TEXT_SECONDARY
         
         root.config(bg=self.bg_primary)
         

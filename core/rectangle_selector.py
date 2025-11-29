@@ -14,11 +14,10 @@ class RectangleSelector:
     - 원본 좌표 저장 + 리사이징된 화면에 표시
     """
     
-    def __init__(self, frame, mode="add"):
+    def __init__(self, frame):
         """
         Args:
             frame: 입력 이미지 (numpy array)
-            mode: "add" (주차칸 추가) 또는 "delete" (주차칸 제거)
         """
         self.original_frame = frame.copy()
         self.frame, self.scale_x, self.scale_y = GeometryUtils.resize_with_ratio(frame)
@@ -26,17 +25,10 @@ class RectangleSelector:
         
         self.points = []           # 현재 클릭 좌표
         self.rectangles = []       # 저장된 사각형 목록: [[(x1,y1), (x2,y2), (x3,y3), (x4,y4)], ...]
-        self.mode = mode           # 모드: "add" 또는 "delete"
         
         cv2.namedWindow("Frame")
         cv2.imshow("Frame", self.temp_frame)
         cv2.setMouseCallback("Frame", self.click_event)
-    
-    def set_mode(self, mode):
-        """모드 변경 ("add" 또는 "delete")"""
-        if mode not in ("add", "delete"):
-            raise ValueError("mode must be 'add' or 'delete'")
-        self.mode = mode
     
     def run(self):
         """윈도우 실행 (ESC로 종료)"""
@@ -60,11 +52,7 @@ class RectangleSelector:
         orig_x = int(x * self.scale_x)
         orig_y = int(y * self.scale_y)
         
-        if self.mode == "add":
-            self._handle_add(orig_x, orig_y, x, y)
-        elif self.mode == "delete":
-            self._handle_delete(x, y)
-        
+        self._handle_add(orig_x, orig_y, x, y)
         cv2.imshow("Frame", self.temp_frame)
     
     def _handle_add(self, orig_x, orig_y, disp_x, disp_y):
@@ -85,21 +73,6 @@ class RectangleSelector:
                 p2_disp = (int(p2_orig[0] / self.scale_x), int(p2_orig[1] / self.scale_y))
                 cv2.line(self.temp_frame, p1_disp, p2_disp, (255, 0, 0), 2)
             self.points = []
-    
-    def _handle_delete(self, disp_x, disp_y):
-        """주차칸 제거 처리 (클릭한 점 근처의 사각형 삭제)"""
-        if not self.rectangles:
-            return
-        
-        # 리사이징된 좌표로 변환 후 근처 사각형 찾기
-        for i, rect in enumerate(self.rectangles):
-            for point in rect:
-                p_disp = (int(point[0] / self.scale_x), int(point[1] / self.scale_y))
-                dist = ((disp_x - p_disp[0]) ** 2 + (disp_y - p_disp[1]) ** 2) ** 0.5
-                if dist < 10:  # 10 픽셀 이내
-                    self.rectangles.pop(i)
-                    self._redraw()
-                    return
     
     def _redraw(self):
         """현재 상태로 화면 다시 그리기"""

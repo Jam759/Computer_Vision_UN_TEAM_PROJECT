@@ -7,6 +7,7 @@ from tkinter import filedialog
 import cv2
 from PIL import Image, ImageTk
 from core.utils import GeometryUtils
+from core.ui_components import UIStyle, UIButton, UILabel, UIFrame
 
 
 class MainScreen:
@@ -26,40 +27,34 @@ class MainScreen:
     
     def _build_ui(self):
         """UI 구성"""
-        frame = tk.Frame(self.app.container, bg=self.app.bg_primary)
+        frame = tk.Frame(self.app.container, bg=UIStyle.BG_PRIMARY)
         frame.pack(fill=tk.BOTH, expand=True, pady=20)
         
         # 제목
-        tk.Label(frame, text="메인 화면", font=("Arial", 28, "bold"),
-                fg=self.app.accent_cyan, bg=self.app.bg_primary).pack(pady=10)
+        UILabel.create_title(frame, "메인 화면", UIStyle.BG_PRIMARY).pack(pady=10)
         
         # 영상 선택 버튼
-        tk.Button(frame, text="영상 선택", command=self.select_file,
-                 bg=self.app.accent_cyan, fg="#000000",
-                 font=("Arial", 11, "bold"), padx=20, pady=10,
-                 activebackground="#00a8cc", relief=tk.FLAT,
-                 cursor="hand2").pack(pady=10)
+        UIButton.create_primary(frame, "영상 선택", self.select_file, padx=20, pady=10).pack(pady=10)
         
         # 파일 경로 표시
-        self.label = tk.Label(frame, text="선택된 파일: 없음",
-                             fg=self.app.text_secondary, bg=self.app.bg_primary,
-                             font=("Arial", 10))
+        self.label = UILabel.create_secondary(frame, "선택된 파일: 없음", UIStyle.BG_PRIMARY)
         self.label.pack(pady=5)
         
         # 썸네일 표시 영역
-        thumb_frame = tk.Frame(frame, bg=self.app.bg_secondary,
-                              highlightbackground=self.app.accent_cyan, highlightthickness=2)
+        thumb_frame = UIFrame.create_video_panel(frame)
         thumb_frame.pack(pady=15)
         
-        self.thumb_label = tk.Label(thumb_frame, bg=self.app.bg_secondary)
+        self.thumb_label = tk.Label(thumb_frame, bg=UIStyle.BG_SECONDARY)
         self.thumb_label.pack()
         
         # 다음 단계 버튼
-        tk.Button(frame, text="주차칸 선택 화면으로 이동",
-                 bg=self.app.accent_cyan, fg="#000000",
-                 font=("Arial", 11, "bold"), padx=20, pady=10,
-                 activebackground="#00a8cc", relief=tk.FLAT,
-                 cursor="hand2", command=self.app.show_roi).pack(pady=30)
+        UIButton.create_primary(
+            frame,
+            "주차칸 선택 화면으로 이동",
+            self.app.show_roi,
+            padx=20,
+            pady=10
+        ).pack(pady=30)
     
     def select_file(self):
         """영상 파일 선택 및 썸네일 표시"""
