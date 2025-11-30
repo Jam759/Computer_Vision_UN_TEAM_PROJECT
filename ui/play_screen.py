@@ -320,6 +320,7 @@ class PlayScreen:
             for roi_idx, roi_info in enumerate(self.roi_integrals):
                 vehicles_in_roi[roi_idx] = False
                 integral = roi_info['integral']
+                roi_area = roi_info['roi_area']
                 rx1, ry1, rx2, ry2 = roi_info['bbox']
 
                 for bbox in bboxes:
@@ -340,9 +341,11 @@ class PlayScreen:
                     # integral은 (h+1, w+1) 형태
                     s = integral[iy2 + 1, ix2 + 1] - integral[iy1, ix2 + 1] - integral[iy2 + 1, ix1] + integral[iy1, ix1]
                     bbox_area = (x2 - x1) * (y2 - y1)
-                    overlap_ratio = (s / bbox_area) if bbox_area > 0 else 0
+                    
+                    # ROI 기준 비율: 교집합이 ROI의 몇 %를 차지하는가
+                    roi_ratio = (s / roi_area) if roi_area > 0 else 0
 
-                    if overlap_ratio >= self.vehicle_detector.OVERLAP_THRESHOLD:
+                    if roi_ratio >= self.vehicle_detector.OVERLAP_THRESHOLD:
                         vehicles_in_roi[roi_idx] = True
                         break
 
@@ -383,6 +386,11 @@ class PlayScreen:
 
             # 적분 이미지 계산 (cv2.integral -> shape (h+1, w+1))
             integral = cv2.integral(mask)
+            
+            # ROI 면적 계산 (Shoelace formula)
+            roi_area = abs(sum(poly[i][0] * poly[(i + 1) % 4][1] - 
+                              poly[(i + 1) % 4][0] * poly[i][1] 
+                              for i in range(4))) / 2
 
             # 폴리의 바운딩 박스
             x_min = int(np.min(pts[:, 0]))
@@ -390,7 +398,7 @@ class PlayScreen:
             x_max = int(np.max(pts[:, 0]))
             y_max = int(np.max(pts[:, 1]))
 
-            self.roi_integrals.append({'integral': integral, 'bbox': (x_min, y_min, x_max, y_max)})
+            self.roi_integrals.append({'integral': integral, 'bbox': (x_min, y_min, x_max, y_max), 'roi_area': roi_area})
     
     def _draw_rois(self, frame):
         """ROI 그리기 (상태에 따른 색상)"""

@@ -140,16 +140,21 @@ def detect_vehicles(frame):
 - 매 프레임 O(1) 시간에 겹침 비율 계산
 - 그리드 샘플링 (20×20)보다 100배 이상 빠름
 
-**알고리즘 (core/utils.py)**
+**알고리즘 (core/utils.py) - 개선된 ROI 기준 계산**
 ```python
-def calculate_overlap_ratio(bbox, roi_polygon):
-    """바운딩 박스와 ROI의 겹침 비율 계산"""
-    # 1. 두 영역의 교집합 계산
-    # 2. 바운딩 박스 면적으로 정규화
-    # 반환: 겹침 비율 (0.0 ~ 1.0)
+def calculate_bbox_in_roi_ratio(bbox, polygon):
+    """BBOX가 ROI의 몇 %를 차지하는지 계산"""
+    # 1. BBOX와 ROI의 교집합 계산
+    # 2. 교집합 / ROI 면적 (ROI 기준)
+    # 반환: BBOX가 ROI에서 차지하는 비율 (0.0 ~ 1.0)
 ```
 
-**임계값**: OVERLAP_THRESHOLD = 0.2 (20% 이상 겹침)
+**임계값**: OVERLAP_THRESHOLD = 0.2 (BBOX가 ROI의 20% 이상 차지할 때)
+
+**변경 내용**:
+- 이전: BBOX의 20%가 ROI에 있을 때 (BBOX 기준)
+- 현재: BBOX가 ROI의 20%를 차지할 때 (ROI 기준) ✅
+- 효과: 작은 ROI에서도 더 정확한 감지 가능
 
 ### 3.3 상태 머신 (State Machine)
 

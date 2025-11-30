@@ -61,19 +61,20 @@ class VehicleDetector:
     
     def check_vehicle_in_roi(self, bbox, roi_polygon, threshold=None):
         """
-        바운딩 박스의 일부가 ROI에 겹치는지 확인
+        BBOX가 ROI의 일정 비율(%)을 차지하는지 확인
         
         Args:
             bbox: [x1, y1, x2, y2] 바운딩 박스
             roi_polygon: ROI 다각형 좌표
-            threshold: 겹침 비율 임계값 (기본값: OVERLAP_THRESHOLD)
+            threshold: 임계값 (BBOX가 ROI의 몇 %를 차지해야 하는가) (기본값: OVERLAP_THRESHOLD)
         
         Returns:
-            bool: 겹침 비율이 임계값 이상이면 True
+            bool: BBOX가 ROI를 임계값 이상 차지하면 True
         """
         if threshold is None:
             threshold = self.OVERLAP_THRESHOLD
         
-        overlap_ratio = GeometryUtils.calculate_overlap_ratio(bbox, roi_polygon)
-        return overlap_ratio >= threshold
+        # ROI 기준 비율: BBOX가 ROI의 몇 %를 차지하는가
+        roi_ratio = GeometryUtils.calculate_bbox_in_roi_ratio(bbox, roi_polygon)
+        return roi_ratio >= threshold
 

@@ -136,6 +136,49 @@ class GeometryUtils:
         
         overlap_ratio = min(overlap_pixels / (grid_samples * grid_samples), 1.0)
         return overlap_ratio
+    
+    @staticmethod
+    def calculate_bbox_in_roi_ratio(bbox, polygon):
+        """
+        BBOX가 ROI의 몇 %를 차지하는지 계산
+        (ROI 기준으로, BBOX 면적 / ROI 면적)
+        
+        Args:
+            bbox: [x1, y1, x2, y2] 바운딩 박스
+            polygon: ROI 다각형 [(x1, y1), (x2, y2), (x3, y3), (x4, y4)]
+        
+        Returns:
+            float: BBOX가 ROI에서 차지하는 비율 (0.0 ~ 1.0)
+        """
+        x1, y1, x2, y2 = bbox
+        bbox_area = (x2 - x1) * (y2 - y1)
+        
+        if bbox_area == 0:
+            return 0.0
+        
+        # ROI 면적 계산 (Shoelace formula)
+        roi_area = abs(sum(polygon[i][0] * polygon[(i + 1) % 4][1] - 
+                          polygon[(i + 1) % 4][0] * polygon[i][1] 
+                          for i in range(4))) / 2
+        
+        if roi_area == 0:
+            return 0.0
+        
+        # 교집합 계산 (더 정확한 계산 위해 sampling 사용)
+        grid_samples = 20
+        overlap_pixels = 0
+        step = max(1, (x2 - x1) // grid_samples)
+        
+        for x in range(x1, x2, step):
+            for y in range(y1, y2, step):
+                if GeometryUtils.point_in_polygon((x, y), polygon):
+                    overlap_pixels += 1
+        
+        intersection_area = (overlap_pixels / (grid_samples * grid_samples)) * bbox_area
+        
+        # BBOX 면적이 ROI의 몇 %를 차지하는지 계산
+        ratio = intersection_area / roi_area
+        return min(ratio, 1.0)
 
 
 class ColorUtils:
