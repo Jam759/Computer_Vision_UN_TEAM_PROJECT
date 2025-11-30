@@ -66,6 +66,13 @@ class PlayScreen:
             # ROI별 마스크 적분 이미지(precomputed) 준비 -> 빠른 겹침 검사
             self._prepare_roi_integrals()
 
+            # 프레임 차이 기반 주차 감지를 위한 이전 프레임 저장
+            self.prev_frame = None
+            self.roi_frame_diff_threshold = 25  # 프레임 차이 임계값 (픽셀값 차이)
+            self.roi_change_ratio_threshold = 0.20  # ROI 영역 변화 비율 임계값 (20% 이상 변화)
+            self.frame_diff_start_time = 8.0  # 프레임 차이 방식 활성화 시간 (초) - 초반 주차 차량이 PARKED 도달할 시간 확보
+            self.frame_diff_enabled = False  # 프레임 차이 방식 활성화 플래그
+
             # 비동기 추론 관련 초기화
             self._latest_frame_for_infer = None
             self._latest_detections = ([], [])  # (bboxes, confidences)
@@ -270,8 +277,36 @@ class PlayScreen:
             except Exception:
                 bboxes, confidences = [], []
 
-            # 각 ROI별 차량 확인
-            vehicles_in_roi = self._check_vehicles_in_rois(bboxes)
+            # 차량 방향 감지 (프레임 불필요, BBOX만 필요)
+            directions = self.vehicle_detector.detect_vehicle_direction(bboxes)
+
+            # 프레임 차이 방식 활성화 체크 (8초 경과 후 - 초반 주차 차량이 PARKED 도달 대기)
+            current_time = self.current_frame / self.fps
+            if not self.frame_diff_enabled and current_time >= self.frame_diff_start_time:
+                self.frame_diff_enabled = True
+                print(f"[INFO] 프레임 차이 방식 활성화 ({current_time:.1f}초 경과)")
+
+            # 각 ROI별 차량 확인 (BBOX 방식 + 프레임 차이 방식 병합)
+            vehicles_in_roi_bbox = self._check_vehicles_in_rois(bboxes, directions)
+
+            # 프레임 차이 방식은 8초 후부터만 활성화 (초반 주차 차량이 PARKED 도달 대기)
+            if self.frame_diff_enabled:
+                vehicles_in_roi_diff = self._check_roi_frame_difference(frame)
+                # 두 방식 병합: BBOX 방식 AND 프레임 차이 방식 둘 다 만족해야 차량 있음
+                vehicles_in_roi = {}
+                # 모든 ROI 인덱스 확인 (BBOX 또는 frame diff에서 검출된 모든 ROI)
+                all_roi_indices = set(vehicles_in_roi_bbox.keys()) | set(vehicles_in_roi_diff.keys())
+                for roi_idx in all_roi_indices:
+                    roi_state = self.parking_tracker.get_roi_state(roi_idx)
+                    # 이미 PARKED 또는 DETECTING 상태인 ROI는 프레임 차이 체크 생략 (초반 주차 차량 유지)
+                    if roi_state == self.parking_tracker.PARKED or roi_state == self.parking_tracker.DETECTING:
+                        vehicles_in_roi[roi_idx] = vehicles_in_roi_bbox.get(roi_idx, False)
+                    else:
+                        # 새로 감지되는 차량(EMPTY 또는 LEAVING)은 AND 조건 적용
+                        vehicles_in_roi[roi_idx] = vehicles_in_roi_bbox.get(roi_idx, False) and vehicles_in_roi_diff.get(roi_idx, False)
+            else:
+                # 8초 이전에는 BBOX 방식만 사용 (초반 주차 차량 감지)
+                vehicles_in_roi = vehicles_in_roi_bbox
             
             # 주차 상태 업데이트
             tracking_info = self.parking_tracker.update(vehicles_in_roi)
@@ -285,9 +320,9 @@ class PlayScreen:
             
             # ROI 그리기
             self._draw_rois(frame)
-            
-            # 차량 바운딩 박스 그리기
-            self._draw_bboxes(frame, bboxes, confidences)
+
+            # 차량 바운딩 박스 및 방향 화살표 그리기
+            self._draw_bboxes(frame, bboxes, confidences, directions)
             
             # 화면에 표시
             self._display_frame(frame)
@@ -311,9 +346,85 @@ class PlayScreen:
             print(f"프레임 업데이트 오류: {e}")
             self._cleanup()
     
-    def _check_vehicles_in_rois(self, bboxes):
-        """각 ROI에 차량이 있는지 확인"""
+    def _check_roi_frame_difference(self, frame):
+        """
+        ROI 영역의 프레임 차이를 계산하여 차량 존재 여부 판단
+
+        이전 프레임과 현재 프레임의 ROI 영역을 비교하여
+        변화가 있으면 차량이 있는 것으로 판단
+
+        Args:
+            frame: 현재 프레임
+
+        Returns:
+            dict: {roi_idx: bool} ROI별 차량 존재 여부
+        """
+        import cv2
+        import numpy as np
+
         vehicles_in_roi = {}
+
+        # 첫 프레임이면 모든 ROI를 False로 초기화하고 현재 프레임 저장
+        if self.prev_frame is None:
+            self.prev_frame = frame.copy()
+            for roi_idx in range(len(self.app.rectangles)):
+                vehicles_in_roi[roi_idx] = False
+            return vehicles_in_roi
+
+        # 그레이스케일 변환
+        gray_current = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray_prev = cv2.cvtColor(self.prev_frame, cv2.COLOR_BGR2GRAY)
+
+        # 각 ROI별로 프레임 차이 계산
+        for roi_idx, roi_polygon in enumerate(self.app.rectangles):
+            # ROI 마스크 생성
+            mask = np.zeros(gray_current.shape, dtype=np.uint8)
+            pts = np.array(roi_polygon, dtype=np.int32)
+            cv2.fillPoly(mask, [pts], 255)
+
+            # ROI 영역만 추출
+            roi_current = cv2.bitwise_and(gray_current, gray_current, mask=mask)
+            roi_prev = cv2.bitwise_and(gray_prev, gray_prev, mask=mask)
+
+            # 프레임 차이 계산
+            diff = cv2.absdiff(roi_current, roi_prev)
+
+            # 임계값 적용 (변화가 큰 픽셀만 추출)
+            _, thresh = cv2.threshold(diff, self.roi_frame_diff_threshold, 255, cv2.THRESH_BINARY)
+
+            # 변화된 픽셀 개수 계산
+            changed_pixels = cv2.countNonZero(thresh)
+
+            # ROI 면적 계산
+            roi_area = cv2.countNonZero(mask)
+
+            # 변화 비율 계산
+            change_ratio = changed_pixels / roi_area if roi_area > 0 else 0
+
+            # 변화 비율이 임계값 이상이면 차량 있음으로 판단
+            vehicles_in_roi[roi_idx] = change_ratio >= self.roi_change_ratio_threshold
+
+        # 현재 프레임을 이전 프레임으로 저장
+        self.prev_frame = frame.copy()
+
+        return vehicles_in_roi
+
+    def _check_vehicles_in_rois(self, bboxes, directions=None):
+        """
+        각 ROI에 차량이 있는지 확인
+
+        Args:
+            bboxes: 바운딩 박스 리스트
+            directions: 방향 정보 리스트 (선택사항)
+
+        Returns:
+            dict: {roi_idx: bool} ROI별 차량 존재 여부
+        """
+        vehicles_in_roi = {}
+
+        # 방향 정보가 없으면 None 리스트 생성
+        if directions is None:
+            directions = [None] * len(bboxes)
 
         # If we have precomputed integrals, use them for O(1) overlap queries
         if hasattr(self, 'roi_integrals') and self.roi_integrals:
@@ -324,6 +435,7 @@ class PlayScreen:
                 rx1, ry1, rx2, ry2 = roi_info['bbox']
 
                 for bbox in bboxes:
+                    # 원본 BBOX 사용 (대각선 조정 제거)
                     x1, y1, x2, y2 = bbox
                     # 빠른 배제: 바운딩 박스가 서로 겹치지 않으면 건너뜀
                     if x2 <= rx1 or x1 >= rx2 or y2 <= ry1 or y1 >= ry2:
@@ -341,7 +453,7 @@ class PlayScreen:
                     # integral은 (h+1, w+1) 형태
                     s = integral[iy2 + 1, ix2 + 1] - integral[iy1, ix2 + 1] - integral[iy2 + 1, ix1] + integral[iy1, ix1]
                     bbox_area = (x2 - x1) * (y2 - y1)
-                    
+
                     # ROI 기준 비율: 교집합이 ROI의 몇 %를 차지하는가
                     roi_ratio = (s / roi_area) if roi_area > 0 else 0
 
@@ -356,6 +468,7 @@ class PlayScreen:
             vehicles_in_roi[roi_idx] = False
 
             for bbox in bboxes:
+                # 원본 BBOX 사용 (대각선 조정 제거)
                 if self.vehicle_detector.check_vehicle_in_roi(bbox, roi_polygon):
                     vehicles_in_roi[roi_idx] = True
                     break
@@ -407,10 +520,100 @@ class PlayScreen:
             color = ColorUtils.get_state_color(roi_state)
             VideoUtils.draw_roi(frame, roi_polygon, color, thickness=2)
     
-    def _draw_bboxes(self, frame, bboxes, confidences):
-        """차량 바운딩 박스 그리기"""
-        for bbox, conf in zip(bboxes, confidences):
-            VideoUtils.draw_bbox(frame, bbox, conf)
+    def _draw_bboxes(self, frame, bboxes, confidences, directions=None):
+        """
+        차량 바운딩 박스 및 방향 화살표 그리기
+
+        Args:
+            frame: 대상 이미지
+            bboxes: 바운딩 박스 리스트
+            confidences: 신뢰도 리스트
+            directions: 방향 정보 리스트 (선택사항)
+        """
+        import cv2
+        import math
+
+        if directions is None:
+            directions = [None] * len(bboxes)
+
+        for bbox, conf, direction_info in zip(bboxes, confidences, directions):
+            x1, y1, x2, y2 = bbox
+
+            # BBOX 그리기 (두께 2, 밝은 파란색)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 200, 0), 2)
+
+            # 신뢰도 표시 (우상단)
+            conf_text = f"{conf:.2f}"
+            cv2.putText(frame, conf_text, (x1, y1 - 5),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 2)
+
+            # 방향 화살표 그리기
+            if direction_info:
+                center_x = (x1 + x2) // 2
+                center_y = (y1 + y2) // 2
+                direction = direction_info.get('direction', 'UNKNOWN')
+
+                # 대각선 이동인 경우 조정된 BBOX도 함께 표시 (초록색 점선)
+                diagonal_directions = ['NE', 'SE', 'SW', 'NW']
+                if direction in diagonal_directions:
+                    adjusted_bbox = self.vehicle_detector.adjust_bbox_for_diagonal_movement(bbox, direction)
+                    ax1, ay1, ax2, ay2 = adjusted_bbox
+                    # 점선 효과 (여러 개의 짧은 선)
+                    dash_length = 5
+                    for i in range(ax1, ax2, dash_length * 2):
+                        cv2.line(frame, (i, ay1), (min(i + dash_length, ax2), ay1), (0, 255, 0), 1)
+                        cv2.line(frame, (i, ay2), (min(i + dash_length, ax2), ay2), (0, 255, 0), 1)
+                    for i in range(ay1, ay2, dash_length * 2):
+                        cv2.line(frame, (ax1, i), (ax1, min(i + dash_length, ay2)), (0, 255, 0), 1)
+                        cv2.line(frame, (ax2, i), (ax2, min(i + dash_length, ay2)), (0, 255, 0), 1)
+
+                # 방향별 처리
+                if direction == 'STATIONARY':
+                    # 정지 상태: 회색 테두리
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (128, 128, 128), 1)
+                    cv2.putText(frame, 'STOP', (center_x - 20, center_y),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
+
+                elif direction == 'NEW':
+                    # 새로 등장: 노란색 테두리
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                    cv2.putText(frame, 'NEW', (center_x - 20, center_y),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+                elif direction != 'UNKNOWN':
+                    # 이동 중: 화살표 및 방향 표시
+                    angle = direction_info.get('angle', 0)
+                    angle_rad = math.radians(angle)
+                    speed = direction_info.get('speed', 0)
+
+                    # 화살표 길이 (속도에 비례)
+                    arrow_length = int(max(30, min(80, speed * 2)))
+                    end_x = int(center_x + arrow_length * math.cos(angle_rad))
+                    end_y = int(center_y + arrow_length * math.sin(angle_rad))
+
+                    # 화살표 색상 (신뢰도 및 속도에 따라)
+                    confidence = direction_info.get('confidence', 0)
+                    if confidence > 0.7:
+                        color = (0, 255, 0)  # 초록색 (높은 신뢰도)
+                    elif confidence > 0.4:
+                        color = (0, 255, 255)  # 노랑색 (중간 신뢰도)
+                    else:
+                        color = (0, 165, 255)  # 주황색 (낮은 신뢰도)
+
+                    # 화살표 그리기 (굵게)
+                    cv2.arrowedLine(frame, (center_x, center_y), (end_x, end_y),
+                                   color, thickness=3, tipLength=0.4)
+
+                    # 방향 텍스트 (화살표 옆)
+                    text_x = center_x + 15
+                    text_y = center_y - 15
+                    cv2.putText(frame, direction, (text_x, text_y),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+                    # 속도 정보 (작게, 하단)
+                    speed_text = f"{speed:.1f}px/f"
+                    cv2.putText(frame, speed_text, (center_x - 30, y2 + 15),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
     
     def _display_frame(self, frame):
         """프레임을 화면에 표시"""
