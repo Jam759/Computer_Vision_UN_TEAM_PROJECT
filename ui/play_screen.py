@@ -47,6 +47,7 @@ class PlayScreen:
             self.frame_times = []  # 프레임 처리 시간 측정용
             self.frames_to_skip = 0  # 밀린 프레임 개수
             self.playback_speed = 1.0  # 재생 배속 (1.0 = 정상, 2.0 = 2배속, 0.5 = 0.5배속)
+            self.playback_time = 0.0  # 누적 재생 시간 (초 단위, 배속 반영)
             
             # FPS 정보
             self.fps = VideoUtils.get_video_fps(self.cap)
@@ -185,7 +186,7 @@ class PlayScreen:
                 bg=UIStyle.BG_PRIMARY, font=UIStyle.FONT_TINY).pack(side=tk.LEFT, padx=2)
         
         # 배속 버튼들 (반복 코드 제거)
-        speeds = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0]
+        speeds = [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
         for speed in speeds:
             is_active = (speed == 1.0)
             btn = UIButton.create_speed_button(speed_frame, f"{speed}x", lambda s=speed: self.set_playback_speed(s), is_active)
@@ -212,10 +213,10 @@ class PlayScreen:
         # 나중에 바인드해서 수동 드래그만 감지하도록 설정
         self.slider.bind("<ButtonRelease-1>", self._on_slider_release)
         
-        self.frame_label = tk.Label(slider_frame, text=f"0/{self.total_frames}",
+        self.time_label = tk.Label(slider_frame, text="00:00:00:00 / 00:00:00:00",
                                    fg=UIStyle.TEXT_SECONDARY, bg=UIStyle.BG_PRIMARY,
                                    font=UIStyle.FONT_TINY)
-        self.frame_label.pack(side=tk.LEFT, padx=5)
+        self.time_label.pack(side=tk.LEFT, padx=5)
     
     def update_frame(self):
         """각 프레임 처리 및 업데이트"""
@@ -224,14 +225,22 @@ class PlayScreen:
         try:
             # 프레임 읽기
             if self.is_playing:
-                # 재생 중: 다음 프레임 읽기
-                ret, frame = self.cap.read()
-                if not ret:
-                    # 영상 끝에 도달
+                # 재생 중: 누적 시간 기반으로 프레임 계산
+                frame_interval = 1.0 / self.fps  # 한 프레임의 시간 (초)
+                self.playback_time += frame_interval * self.playback_speed  # 배속 반영
+                self.current_frame = int(self.playback_time * self.fps)  # 프레임 번호로 변환
+                
+                # 범위 체크
+                if self.current_frame >= self.total_frames:
+                    self.current_frame = self.total_frames - 1
                     self.is_playing = False
                     return
-                # 현재 프레임 인덱스 수동 증가 (배속에 따라 조정)
-                self.current_frame += int(self.playback_speed)
+                
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
+                ret, frame = self.cap.read()
+                if not ret:
+                    self.is_playing = False
+                    return
                 self.frame_loaded = True
             else:
                 # 일시정지 중: 현재 프레임 유지
@@ -408,9 +417,11 @@ class PlayScreen:
         self.video_panel.config(image=img)
         self.video_panel.image = img
         
-        # 슬라이더 및 프레임 정보 업데이트 (콜백 없이 순수 값만 업데이트)
+        # 슬라이더 및 시간 정보 업데이트 (콜백 없이 순수 값만 업데이트)
         self.slider.set(self.current_frame)
-        self.frame_label.config(text=f"{self.current_frame}/{self.total_frames}")
+        current_time = self._frame_to_time(self.current_frame)
+        total_time = self._frame_to_time(self.total_frames)
+        self.time_label.config(text=f"{current_time} / {total_time}")
 
     def _inference_worker(self):
         """Background inference worker that processes the latest frame.
@@ -474,10 +485,20 @@ class PlayScreen:
         self.playback_speed = speed
         self.speed_label.config(text=f"{speed}x")
     
+    def _frame_to_time(self, frame_num):
+        """프레임 번호를 HH:MM:SS:MS 형식으로 변환"""
+        total_ms = int((frame_num / self.fps) * 1000)
+        hours = total_ms // 3600000
+        minutes = (total_ms % 3600000) // 60000
+        seconds = (total_ms % 60000) // 1000
+        milliseconds = total_ms % 1000
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{milliseconds:03d}"
+    
     def _on_slider_release(self, event):
         """슬라이더에서 마우스를 뗄 때만 콜백 (사용자 수동 조작)"""
         value = self.slider.get()
         self.current_frame = int(value)
+        self.playback_time = self.current_frame / self.fps  # 누적 시간 동기화
         self.is_playing = False
         self.frame_loaded = False  # 슬라이더 이동 시 새 프레임 로드 강제
     

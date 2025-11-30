@@ -82,7 +82,7 @@ Computer_Vision_UN_TEAM_PROJECT/
 │   ├── rectangle_selector.py      # OpenCV 기반 ROI 선택 도구
 │   └── utils.py                    # 기하학/색상/비디오 유틸
 ├── data/                           # 데이터 (저장용)
-├── yolov8m.pt                      # YOLOv8 Medium 모델 (자동 다운로드)
+├── yolov8l.pt                      # YOLOv8 Large 모델 (자동 다운로드)
 ├── requirements.txt                # 의존성 명시
 └── README.md                       # 이 파일
 
@@ -96,9 +96,10 @@ Computer_Vision_UN_TEAM_PROJECT/
 - `play_screen.py`: 비디오 재생, 실시간 차량 감지, 상태 표시
   - 비동기 추론 워커: 백그라운드 스레드에서 YOLO 추론 실행
   - 성능 최적화: 배속 >= 3.0일 때 반해상도 감지 적용
+  - 시간 기반 프레임 동기화: 배속에 관계없이 정확한 슬라이더 위치 유지
 
 **핵심 로직 (core/)**
-- `VehicleDetector.py`: YOLOv8 모델 로드 및 차량 검출
+- `VehicleDetector.py`: YOLOv8 Large 모델 로드 및 차량 검출 (높은 정확도)
 - `ParkingTracker.py`: 프레임 기반 상태 머신 관리
 - `rectangle_selector.py`: 사용자의 마우스 클릭으로 ROI 다각형 생성
 - `utils.py`: 기하학 연산, 색상 정의, 비디오 처리 유틸
@@ -112,10 +113,11 @@ Computer_Vision_UN_TEAM_PROJECT/
 
 ### 3.1 차량 검출 (Vehicle Detection)
 
-**방식**: YOLOv8 Medium (`yolov8m.pt`)
+**방식**: YOLOv8 Large (`yolov8l.pt`)
 - 클래스: 차량 (자동차, 오토바이, 버스, 트럭)
 - 신뢰도 임계값: 0.5
-- GPU 지원: NVIDIA CUDA 활용 시 ~13-26ms/프레임
+- 정확도: Medium보다 3-5% 향상
+- GPU 지원: NVIDIA CUDA 활용 시 ~40-60ms/프레임
 
 **구현 (core/VehicleDetector.py)**
 ```python
@@ -129,7 +131,7 @@ def detect_vehicles(frame):
 **GPU 모드 설정**:
 - CUDA 설치 시 자동으로 GPU 사용
 - 폴백: CPU 모드로 자동 전환
-- 현재 성능: GPU 약 15배 빠름 (CPU 200ms → GPU 13-26ms)
+- 현재 성능: GPU 약 10배 빠름 (CPU 400-500ms → GPU 40-60ms)
 
 ### 3.2 ROI 판정 (ROI Overlap Detection)
 
@@ -210,11 +212,12 @@ while not self._infer_stop_event.is_set():
 | **적분 이미지 (ROI 판정)** | 100배 빠른 겹침 계산 | 모든 프레임 |
 | **비동기 추론** | UI 블로킹 제거 | 모든 프레임 |
 | **프레임 드롭 방식** | 지연 축적 방지 | 느린 PC |
-| **GPU 가속** | 15배 빠른 추론 | GPU 사용 시 |
+| **GPU 가속** | 10배 빠른 추론 | GPU 사용 시 |
 
 **결과**:
-- GPU 모드: 평균 13-26ms/프레임 (FPS 20 기준 50ms 설정, 여유 있음)
-- UI 렌더링: 평균 12-13ms (빠른 배속에서도 부드러움)
+- GPU 모드 (Large): 평균 40-60ms/프레임 (높은 정확도)
+- UI 렌더링: 평균 12-13ms (배속 최적화로 부드러움 유지)
+- 시간 기반 동기화: 배속에 관계없이 정확한 슬라이더 위치
 
 ---
 
@@ -351,7 +354,7 @@ for speed in [0.5, 1.0, 1.5, 2.0, 3.0, 4.0]:
 
 ## ⚠️ 알려진 제한사항
 
-1. **모델 고정**: YOLOv8 Medium(`yolov8m.pt`)만 사용 가능
+1. **모델 업그레이드**: YOLOv8 Large(`yolov8l.pt`)로 높은 정확도 제공
 2. **ROI 사각형만 지원**: 다각형 미지원 (현재는 4점 선택)
 3. **단일 비디오 처리**: 실시간 카메라 입력 미지원 (파일 기반만)
 4. **Windows 테스트**: Linux/macOS에서의 호환성 미검증

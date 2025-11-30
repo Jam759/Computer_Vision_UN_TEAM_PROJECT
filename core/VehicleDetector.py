@@ -15,8 +15,8 @@ class VehicleDetector:
     OVERLAP_THRESHOLD = 0.2          # 30% 겹침 판정 기준
     
     def __init__(self):
-        """YOLOv8 Medium 모델 로드 (GPU 우선, CPU 폴백)"""
-        self.model = YOLO('yolov8m.pt')
+        """YOLOv8 Large 모델 로드 (GPU 우선, CPU 폴백)"""
+        self.model = YOLO('yolov8l.pt')
         
         # GPU 사용 가능 여부 확인 및 설정
         try:
