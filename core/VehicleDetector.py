@@ -12,7 +12,7 @@ class VehicleDetector:
     # COCO 데이터셋 차량 클래스
     VEHICLE_CLASSES = [2, 3, 5, 7]  # car, motorcycle, bus, truck
     CONFIDENCE_THRESHOLD = 0.5       # 신뢰도 임계값
-    OVERLAP_THRESHOLD = 0.2          # ROI 기준 겹침 비율
+    OVERLAP_THRESHOLD = 0.10         # ROI 기준 겹침 비율 (BBOX가 ROI의 10% 이상 차지)
     BBOX_SHRINK_RATIO = 0.80         # BBOX 축소 비율 (80% 유지, 20% 제거)
                                       # 대각선 차량의 불필요한 모서리 제거
     

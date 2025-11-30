@@ -156,7 +156,7 @@ def calculate_bbox_in_roi_ratio(bbox, polygon):
     # 반환: BBOX가 ROI에서 차지하는 비율 (0.0 ~ 1.0)
 ```
 
-**임계값**: OVERLAP_THRESHOLD = 0.2 (BBOX가 ROI의 20% 이상 차지할 때)
+**임계값**: OVERLAP_THRESHOLD = 0.10 (BBOX가 ROI의 10% 이상 차지할 때)
 
 **변경 내용**:
 - 이전: BBOX의 20%가 ROI에 있을 때 (BBOX 기준)
