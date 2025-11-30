@@ -124,9 +124,16 @@ Computer_Vision_UN_TEAM_PROJECT/
 def detect_vehicles(frame):
     """프레임에서 차량 검출"""
     results = self.model(frame, verbose=False, classes=VEHICLE_CLASSES, device=self.device)
-    # 반환: (바운딩 박스 리스트, 신뢰도 리스트)
+    # BBOX 중심 영역만 추출 (대각선 차량의 모서리 제거)
+    bbox = self._shrink_bbox(bbox, BBOX_SHRINK_RATIO=0.80)
     return bboxes, confidences
 ```
+
+**BBOX 축소 기능 (새로 추가)**:
+- `BBOX_SHRINK_RATIO = 0.80` (80% 유지, 20% 제거)
+- 대각선으로 보는 차량의 불필요한 모서리 제거
+- 중심 기준 대칭으로 축소하여 차량 중심부만 검사
+- 효과: 빈 공간 오탐 감소, 정확도 향상
 
 **GPU 모드 설정**:
 - CUDA 설치 시 자동으로 GPU 사용
